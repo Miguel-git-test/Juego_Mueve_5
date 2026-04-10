@@ -52,18 +52,11 @@
         </div>
     </div>
 
-    <!-- Celebration 1: Reventaste la máquina -->
-    <div id="unlock-overlay" class="overlay">
-        <h2 style="color: gold; text-shadow: 0 0 20px gold;">¡REVENTASTE LA MÁQUINA!</h2>
-        <p>Has alcanzado el límite de velocidad. Se ha desbloqueado un nuevo modo de juego secreto.</p>
-        <button id="unlock-ok-btn">Aceptar</button>
-    </div>
-
     <!-- Celebration 2: Te has pasado la máquina -->
     <div id="final-unlock-overlay" class="overlay">
         <h2 style="color: #ff00ff; text-shadow: 0 0 20px #ff00ff;">¡TE HAS PASADO LA MÁQUINA!</h2>
-        <p>Tu memoria es infalible. Has desbloqueado el desafío definitivo: MODO Q*BERT.</p>
-        <button id="final-unlock-ok-btn">ENTRAR AL MASTER</button>
+        <p>Tu memoria es infalible. ¡Has completado todos los desafíos del sistema!</p>
+        <button id="final-unlock-ok-btn">Aceptar</button>
     </div>
 
     <!-- Win Overlay -->
@@ -88,14 +81,13 @@
             <button id="set-classic-mode" class="secondary-btn active">CLÁSICO</button>
             <button id="set-puzzle-mode" class="secondary-btn">ESTRATEGIA</button>
             <button id="set-blitz-mode" class="secondary-btn">AGOBIO</button>
-            <button id="set-secret-mode" class="secondary-btn" style="display: none; border-color: gold; color: gold;">SECRETO</button>
-            <button id="set-qbert-mode" class="secondary-btn" style="display: none; border-color: #ff00ff; color: #ff00ff;">Q*BERT</button>
+            <button id="set-secret-mode" class="secondary-btn">PARPADEO</button>
         </div>
         <div style="display: flex; gap: 10px;">
             <button id="start-btn">Empezar</button>
             <button id="level-select-btn" class="secondary-btn" style="margin-top: 20px;">Elegir Nivel</button>
         </div>
-        <div style="margin-top: 20px; font-size: 0.7rem; opacity: 0.4;">v2.0.0 - Edición Master</div>
+        <div id="version-tag" style="margin-top: 20px; font-size: 0.7rem; opacity: 0.4; cursor: pointer;">v2.5.1 - Master Edition</div>
     </div>
 
     <!-- Level Selection Grid Overlay -->

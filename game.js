@@ -1,6 +1,6 @@
 /**
- * Mueve 5 - Master Edition (v2.0.0)
- * Modes: CLASSIC, PUZZLE, AGOBIO, MEMORIA (Secret), QBERT (Master)
+ * Mueve 5 - Master Edition (v2.5.1)
+ * Modes: CLASSIC, PUZZLE, BLITZ, MEMORIA (Parpadeo)
  */
 
 class Game {
@@ -24,9 +24,7 @@ class Game {
             blitzMaxLevel: 1,
             memoriaLevel: 1,
             memoriaMaxLevel: 0,
-            qbertLevel: 1,
-            secretUnlocked: false,
-            qbertUnlocked: false
+            secretUnlocked: true // Now public by default
         };
 
         this.gameMode = this.data.gameMode;
@@ -58,7 +56,6 @@ class Game {
         else if (this.gameMode === 'PUZZLE') this.level = this.data.puzzleLevel || 1;
         else if (this.gameMode === 'BLITZ') this.level = this.data.blitzLevel || 1;
         else if (this.gameMode === 'MEMORIA') this.level = this.data.memoriaLevel || 1;
-        else if (this.gameMode === 'QBERT') this.level = this.data.qbertLevel || 1;
     }
 
     init() {
@@ -85,8 +82,6 @@ class Game {
         } else if (this.gameMode === 'MEMORIA') {
             this.data.memoriaLevel = this.level;
             if (this.level > this.data.memoriaMaxLevel) this.data.memoriaMaxLevel = this.level;
-        } else if (this.gameMode === 'QBERT') {
-            this.data.qbertLevel = this.level;
         }
         this.data.gameMode = this.gameMode;
         localStorage.setItem('mueve5_data', JSON.stringify(this.data));
@@ -125,14 +120,11 @@ class Game {
         document.getElementById('set-puzzle-mode').onclick = () => this.setMode('PUZZLE');
         document.getElementById('set-blitz-mode').onclick = () => this.setMode('BLITZ');
         document.getElementById('set-secret-mode').onclick = () => this.setMode('MEMORIA');
-        document.getElementById('set-qbert-mode').onclick = () => this.setMode('QBERT');
 
-        document.getElementById('unlock-ok-btn').onclick = () => this.closeOverlays();
-        document.getElementById('final-unlock-ok-btn').onclick = () => {
-            this.closeOverlays();
-            this.setMode('QBERT');
-            this.startGame();
-        };
+        const unlockOkBtn = document.getElementById('unlock-ok-btn');
+        if (unlockOkBtn) unlockOkBtn.onclick = () => this.closeOverlays();
+
+        document.getElementById('final-unlock-ok-btn').onclick = () => this.closeOverlays();
 
         document.getElementById('close-level-grid').onclick = () => {
             document.getElementById('level-grid-overlay').classList.remove('active');
@@ -161,8 +153,7 @@ class Game {
             CLASSIC: document.getElementById('set-classic-mode'),
             PUZZLE: document.getElementById('set-puzzle-mode'),
             BLITZ: document.getElementById('set-blitz-mode'),
-            MEMORIA: document.getElementById('set-secret-mode'),
-            QBERT: document.getElementById('set-qbert-mode')
+            MEMORIA: document.getElementById('set-secret-mode')
         };
         
         Object.keys(btns).forEach(m => {
@@ -170,9 +161,7 @@ class Game {
             else btns[m].classList.remove('active');
         });
 
-        // Toggle visibility of unlocked modes
         if (this.data.secretUnlocked) btns.MEMORIA.style.display = 'block';
-        if (this.data.qbertUnlocked) btns.QBERT.style.display = 'block';
 
         // Custom label / visuals
         if (this.gameMode === 'PUZZLE') {
@@ -182,10 +171,6 @@ class Game {
             this.movesLabelEl.innerText = 'Pasos';
             this.boardEl.classList.add('classic-mode');
         }
-
-        // QBERT Visuals
-        if (this.gameMode === 'QBERT') this.boardEl.classList.add('qbert-mode');
-        else this.boardEl.classList.remove('qbert-mode');
 
         // Timer stats visibility
         this.timeStatEl.style.display = (this.gameMode === 'BLITZ' || this.gameMode === 'MEMORIA') ? 'flex' : 'none';
@@ -235,7 +220,7 @@ class Game {
 
         // Player Pos
         do {
-            this.playerPos = { x: Math.floor(Math.random() * boardSize), y: Math.floor(Math.random() * boardSize) };
+            this.playerPos = { x: Math.floor(Math.random() * 8), y: Math.floor(Math.random() * 8) };
         } while (this.isWall(this.playerPos.x, this.playerPos.y));
 
         // BACKBONE
@@ -269,7 +254,11 @@ class Game {
         while (this.targets.length < metasCount) {
             const source = this.targets[Math.floor(Math.random() * this.targets.length)];
             const budget = (this.gameMode === 'PUZZLE') ? source.value : 5;
-            const valid = this.findReachableCells(source, budget).filter(pt => !this.isWall(pt.x, pt.y) && !this.targets.some(t => t.x === pt.x && t.y === pt.y));
+            const valid = this.findReachableCells(source, budget).filter(pt => 
+                !this.isWall(pt.x, pt.y) && 
+                !this.targets.some(t => t.x === pt.x && t.y === pt.y) &&
+                !(pt.x === this.playerPos.x && pt.y === this.playerPos.y)
+            );
             if (valid.length === 0) break;
             this.targets.push({ ...valid[Math.floor(Math.random() * valid.length)], collected: false, value: (this.gameMode === 'PUZZLE' ? 2 : 5) });
         }
@@ -309,13 +298,7 @@ class Game {
         this.stopBlitzTimer();
         const baseSeconds = Math.max(this.config.blitzMinTime, this.config.blitzBaseTime - (this.level - 1));
         
-        // UNLOCK DETECTION: Reventaste la máquina
-        if (baseSeconds === 10 && !this.data.secretUnlocked) {
-            this.data.secretUnlocked = true;
-            this.savePersistentData();
-            document.getElementById('unlock-overlay').classList.add('active');
-            this.updateModeUI();
-        }
+        // UNLOCK DETECTION REMOVED - Parpadeo is now public
 
         this.remainingTime = baseSeconds * 10;
         this.updateTimerUI();
@@ -426,16 +409,7 @@ class Game {
     win() {
         this.stopBlitzTimer();
         this.gameState = 'WIN';
-        
-        // Final Unlock Detection: Te has pasado la máquina
-        if (this.gameMode === 'MEMORIA' && this.level === this.config.memoriaMaxLevels && !this.data.qbertUnlocked) {
-            this.data.qbertUnlocked = true;
-            this.savePersistentData();
-            document.getElementById('final-unlock-overlay').classList.add('active');
-            this.updateModeUI();
-        } else {
-            document.getElementById('win-overlay').classList.add('active');
-        }
+        document.getElementById('win-overlay').classList.add('active');
     }
 
     nextLevel() {
