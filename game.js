@@ -1,5 +1,6 @@
 /**
- * Mueve 5 - Strategist Edition: Master of Deception II (In-Path Traps)
+ * Mueve 5 - Master Edition (v2.0.0)
+ * Modes: CLASSIC, PUZZLE, AGOBIO, MEMORIA (Secret), QBERT (Master)
  */
 
 class Game {
@@ -9,17 +10,27 @@ class Game {
             wallDensity: 0.12,
             levelToMetasRatio: 2,
             moveDelay: 100,
-            initialJumpBudget: 5
+            initialJumpBudget: 5,
+            blitzBaseTime: 30, 
+            blitzMinTime: 10,  // Standard floor is 10s now
+            memoriaMaxLevels: 10
         };
 
         this.data = JSON.parse(localStorage.getItem('mueve5_data')) || {
             gameMode: 'CLASSIC',
             classicLevel: 1,
-            puzzleLevel: 1
+            puzzleLevel: 1,
+            blitzLevel: 1,
+            blitzMaxLevel: 1,
+            memoriaLevel: 1,
+            memoriaMaxLevel: 0,
+            qbertLevel: 1,
+            secretUnlocked: false,
+            qbertUnlocked: false
         };
 
         this.gameMode = this.data.gameMode;
-        this.level = this.gameMode === 'CLASSIC' ? this.data.classicLevel : this.data.puzzleLevel;
+        this.setLevelFromMode();
 
         this.playerPos = { x: 0, y: 0 };
         this.targets = [];
@@ -31,7 +42,23 @@ class Game {
         this.history = []; 
         this.initialLevelState = null;
 
+        // Blitz Timer
+        this.remainingTime = 0; 
+        this.timerInterval = null;
+
+        // Memoria Mode State
+        this.memoriaPhase = 'NONE'; // FLASH, GUESS, REVEAL
+        this.memoriaSelected = [];
+        
         this.init();
+    }
+
+    setLevelFromMode() {
+        if (this.gameMode === 'CLASSIC') this.level = this.data.classicLevel || 1;
+        else if (this.gameMode === 'PUZZLE') this.level = this.data.puzzleLevel || 1;
+        else if (this.gameMode === 'BLITZ') this.level = this.data.blitzLevel || 1;
+        else if (this.gameMode === 'MEMORIA') this.level = this.data.memoriaLevel || 1;
+        else if (this.gameMode === 'QBERT') this.level = this.data.qbertLevel || 1;
     }
 
     init() {
@@ -40,8 +67,8 @@ class Game {
         this.levelValEl = document.getElementById('level-val');
         this.movesValEl = document.getElementById('moves-val');
         this.movesLabelEl = document.getElementById('moves-label');
-        
-        document.documentElement.style.setProperty('--grid-size', this.config.boardSize);
+        this.timeStatEl = document.getElementById('time-stat');
+        this.timeValEl = document.getElementById('time-val');
         
         this.createBoardElements();
         this.setupEventListeners();
@@ -51,7 +78,16 @@ class Game {
 
     savePersistentData() {
         if (this.gameMode === 'CLASSIC') this.data.classicLevel = this.level;
-        else this.data.puzzleLevel = this.level;
+        else if (this.gameMode === 'PUZZLE') this.data.puzzleLevel = this.level;
+        else if (this.gameMode === 'BLITZ') {
+            this.data.blitzLevel = this.level;
+            if (this.level > this.data.blitzMaxLevel) this.data.blitzMaxLevel = this.level;
+        } else if (this.gameMode === 'MEMORIA') {
+            this.data.memoriaLevel = this.level;
+            if (this.level > this.data.memoriaMaxLevel) this.data.memoriaMaxLevel = this.level;
+        } else if (this.gameMode === 'QBERT') {
+            this.data.qbertLevel = this.level;
+        }
         this.data.gameMode = this.gameMode;
         localStorage.setItem('mueve5_data', JSON.stringify(this.data));
     }
@@ -61,8 +97,15 @@ class Game {
         this.playerEl = document.createElement('div');
         this.playerEl.id = 'player';
         this.boardEl.appendChild(this.playerEl);
-        for (let y = 0; y < this.config.boardSize; y++) {
-            for (let x = 0; x < this.config.boardSize; x++) {
+        
+        let cols = 8, rows = 8;
+        if (this.gameMode === 'MEMORIA') { cols = 1; rows = 10; }
+        
+        document.documentElement.style.setProperty('--grid-cols', cols);
+        document.documentElement.style.setProperty('--grid-rows', rows);
+
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
                 const cell = document.createElement('div');
                 cell.className = 'cell';
                 cell.id = `cell-${x}-${y}`;
@@ -72,91 +115,127 @@ class Game {
     }
 
     setupEventListeners() {
-        document.getElementById('start-btn').addEventListener('click', () => this.startGame());
-        document.getElementById('next-level-btn').addEventListener('click', () => this.nextLevel());
-        document.getElementById('restart-btn').addEventListener('click', () => this.startGame());
-        document.getElementById('level-select-btn').addEventListener('click', () => this.showLevelGrid());
-        document.getElementById('menu-btn').addEventListener('click', () => this.showMenu());
+        document.getElementById('start-btn').onclick = () => this.startGame();
+        document.getElementById('next-level-btn').onclick = () => this.nextLevel();
+        document.getElementById('restart-btn').onclick = () => this.restartGameFromContext();
+        document.getElementById('level-select-btn').onclick = () => this.showLevelGrid();
+        document.getElementById('menu-btn').onclick = () => this.showMenu();
         
-        document.getElementById('set-classic-mode').addEventListener('click', () => this.setMode('CLASSIC'));
-        document.getElementById('set-puzzle-mode').addEventListener('click', () => this.setMode('PUZZLE'));
+        document.getElementById('set-classic-mode').onclick = () => this.setMode('CLASSIC');
+        document.getElementById('set-puzzle-mode').onclick = () => this.setMode('PUZZLE');
+        document.getElementById('set-blitz-mode').onclick = () => this.setMode('BLITZ');
+        document.getElementById('set-secret-mode').onclick = () => this.setMode('MEMORIA');
+        document.getElementById('set-qbert-mode').onclick = () => this.setMode('QBERT');
 
-        document.getElementById('close-level-grid').addEventListener('click', () => {
+        document.getElementById('unlock-ok-btn').onclick = () => this.closeOverlays();
+        document.getElementById('final-unlock-ok-btn').onclick = () => {
+            this.closeOverlays();
+            this.setMode('QBERT');
+            this.startGame();
+        };
+
+        document.getElementById('close-level-grid').onclick = () => {
             document.getElementById('level-grid-overlay').classList.remove('active');
             if (this.gameState === 'START') document.getElementById('start-overlay').classList.add('active');
-        });
+        };
         
-        document.getElementById('undo-btn').addEventListener('click', () => this.undoMove());
-        document.getElementById('restart-level-btn').addEventListener('click', () => this.restartLevel());
-        document.getElementById('level-display').addEventListener('click', () => this.showLevelGrid());
-        window.addEventListener('resize', () => this.updateUI());
+        document.getElementById('undo-btn').onclick = () => this.undoMove();
+        document.getElementById('restart-level-btn').onclick = () => this.restartLevel();
+        document.getElementById('level-display').onclick = () => this.showLevelGrid();
     }
 
     setMode(mode) {
         if (this.isAnimating) return;
         this.gameMode = mode;
-        this.level = mode === 'CLASSIC' ? this.data.classicLevel : this.data.puzzleLevel;
+        this.setLevelFromMode();
         this.currentMaxJump = this.config.initialJumpBudget;
         this.savePersistentData();
+        this.createBoardElements();
         this.updateModeUI();
         this.updateUI();
         this.vibrate(20);
     }
 
     updateModeUI() {
-        const classicBtn = document.getElementById('set-classic-mode');
-        const puzzleBtn = document.getElementById('set-puzzle-mode');
-        if (this.gameMode === 'CLASSIC') {
-            classicBtn.classList.add('active');
-            puzzleBtn.classList.remove('active');
-            this.boardEl.classList.add('classic-mode');
-            this.movesLabelEl.innerText = 'Pasos';
-        } else {
-            classicBtn.classList.remove('active');
-            puzzleBtn.classList.add('active');
-            this.boardEl.classList.remove('classic-mode');
+        const btns = {
+            CLASSIC: document.getElementById('set-classic-mode'),
+            PUZZLE: document.getElementById('set-puzzle-mode'),
+            BLITZ: document.getElementById('set-blitz-mode'),
+            MEMORIA: document.getElementById('set-secret-mode'),
+            QBERT: document.getElementById('set-qbert-mode')
+        };
+        
+        Object.keys(btns).forEach(m => {
+            if (this.gameMode === m) btns[m].classList.add('active');
+            else btns[m].classList.remove('active');
+        });
+
+        // Toggle visibility of unlocked modes
+        if (this.data.secretUnlocked) btns.MEMORIA.style.display = 'block';
+        if (this.data.qbertUnlocked) btns.QBERT.style.display = 'block';
+
+        // Custom label / visuals
+        if (this.gameMode === 'PUZZLE') {
             this.movesLabelEl.innerText = 'Salto';
+            this.boardEl.classList.remove('classic-mode');
+        } else {
+            this.movesLabelEl.innerText = 'Pasos';
+            this.boardEl.classList.add('classic-mode');
         }
+
+        // QBERT Visuals
+        if (this.gameMode === 'QBERT') this.boardEl.classList.add('qbert-mode');
+        else this.boardEl.classList.remove('qbert-mode');
+
+        // Timer stats visibility
+        this.timeStatEl.style.display = (this.gameMode === 'BLITZ' || this.gameMode === 'MEMORIA') ? 'flex' : 'none';
+        
+        document.querySelectorAll('.stat-item').forEach(el => el.classList.remove('active-mode'));
+        if (this.gameMode === 'BLITZ' || this.gameMode === 'MEMORIA') this.timeStatEl.classList.add('active-mode');
+        else this.movesLabelEl.parentElement.classList.add('active-mode');
     }
 
     startGame() {
         if (this.isAnimating) return;
         this.gameState = 'PLAYING';
         this.closeOverlays();
+        this.createBoardElements(); // Refresh grid layout
         this.generateLevel();
-        if (this.playerEl) this.playerEl.classList.add('active');
-        this.updateUI();
-    }
-
-    nextLevel() {
-        if (this.isAnimating) return;
-        if (this.level < 100) {
-            this.level++;
+        
+        if (this.playerEl) {
+            this.playerEl.classList.toggle('active', this.gameMode !== 'MEMORIA');
         }
-        this.savePersistentData();
-        this.startGame();
+        
+        if (this.gameMode === 'BLITZ') this.startBlitzTimer();
+        if (this.gameMode === 'MEMORIA') this.startMemoriaSequence();
+        
+        this.updateUI();
     }
 
     generateLevel() {
         this.walls = [];
         this.targets = [];
         this.currentMaxJump = this.config.initialJumpBudget;
-        const totalCells = this.config.boardSize * this.config.boardSize;
+        
+        if (this.gameMode === 'MEMORIA') {
+            this.generateSecretLevel();
+            return;
+        }
 
-        // Generate Walls
+        const boardSize = 8;
+        const totalCells = boardSize * boardSize;
+
+        // Walls
         for (let i = 0; i < totalCells * this.config.wallDensity; i++) {
-            const wx = Math.floor(Math.random() * this.config.boardSize);
-            const wy = Math.floor(Math.random() * this.config.boardSize);
+            const wx = Math.floor(Math.random() * boardSize);
+            const wy = Math.floor(Math.random() * boardSize);
             if ((wx===0 && wy===0) || (wx===0 && wy===7) || (wx===7 && wy===0) || (wx===7 && wy===7)) continue;
             if (!this.walls.some(w => w.x === wx && w.y === wy)) this.walls.push({ x: wx, y: wy });
         }
 
-        // Player starting pos
+        // Player Pos
         do {
-            this.playerPos = {
-                x: Math.floor(Math.random() * this.config.boardSize),
-                y: Math.floor(Math.random() * this.config.boardSize)
-            };
+            this.playerPos = { x: Math.floor(Math.random() * boardSize), y: Math.floor(Math.random() * boardSize) };
         } while (this.isWall(this.playerPos.x, this.playerPos.y));
 
         // BACKBONE
@@ -176,282 +255,302 @@ class Game {
         }
         this.targets = backbone;
 
-        // --- DECEPTION LOGIC ---
-        if (this.gameMode === 'PUZZLE' && this.targets.length > 2) {
-            // 1. Primary Trap (The Closer Cebo)
-            const firstTarget = this.targets[0];
-            const distToReal = this.getShortestPath(this.playerPos, firstTarget).length;
-            const possibleTrapCells = this.findReachableCells(this.playerPos, distToReal - 1);
-            const validStartTrap = possibleTrapCells.filter(pt => !this.isWall(pt.x, pt.y) && !this.targets.some(t => t.x === pt.x && t.y === pt.y));
-            if (validStartTrap.length > 0) {
-                const trapCell = validStartTrap[Math.floor(Math.random() * validStartTrap.length)];
-                this.targets.push({ ...trapCell, collected: false, value: 2 });
-            }
-
-            // 2. In-Path Decoys (Distracciones en Ruta)
-            // Pick 2 random targets (excluding the last one) to add a decoy near them
-            const potentialBases = this.targets.filter((t, idx) => idx < this.targets.length - 1 && t.collected === false);
-            const shuffledBases = potentialBases.sort(() => 0.5 - Math.random()).slice(0, 2);
-            
-            shuffledBases.forEach(base => {
-                const reach = this.findReachableCells(base, base.value);
-                const decoys = reach.filter(pt => !this.isWall(pt.x, pt.y) && !this.targets.some(t => t.x === pt.x && t.y === pt.y));
-                if (decoys.length > 0) {
-                    // Bias towards decoys that are closer to the base than the next actual target
-                    const decoy = decoys[Math.floor(Math.random() * decoys.length)];
-                    this.targets.push({ ...decoy, collected: false, value: 2 });
-                }
-            });
+        // Deception (Puzzle only)
+        if (this.gameMode === 'PUZZLE') {
+            // Trap at start
+            const first = this.targets[0];
+            const dist = this.getShortestPath(this.playerPos, first)?.length || 99;
+            const traps = this.findReachableCells(this.playerPos, dist - 1).filter(pt => !this.isWall(pt.x, pt.y) && !this.targets.some(t => t.x === pt.x && t.y === pt.y));
+            if (traps.length > 0) this.targets.push({ ...traps[Math.floor(Math.random() * traps.length)], collected: false, value: 2 });
         }
 
-        // Extra Metas
-        // Max 15 targets to prevent board saturation
-        const metasCount = this.gameMode === 'CLASSIC' ? Math.min(15, 5 + Math.floor(this.level / 2)) : 10;
-        const numTotalTargets = Math.max(metasCount, this.targets.length);
-        while (this.targets.length < numTotalTargets) {
+        // Metas fill
+        const metasCount = this.gameMode === 'BLITZ' ? 15 : Math.min(15, 5 + Math.floor(this.level / 2));
+        while (this.targets.length < metasCount) {
             const source = this.targets[Math.floor(Math.random() * this.targets.length)];
-            const budget = this.gameMode === 'CLASSIC' ? 5 : source.value;
-            const reachable = this.findReachableCells(source, budget);
-            const valid = reachable.filter(pt => !this.isWall(pt.x, pt.y) && !this.targets.some(t => t.x === pt.x && t.y === pt.y));
+            const budget = (this.gameMode === 'PUZZLE') ? source.value : 5;
+            const valid = this.findReachableCells(source, budget).filter(pt => !this.isWall(pt.x, pt.y) && !this.targets.some(t => t.x === pt.x && t.y === pt.y));
             if (valid.length === 0) break;
-            const extra = valid[Math.floor(Math.random() * valid.length)];
-            this.targets.push({ ...extra, collected: false, value: this.gameMode === 'CLASSIC' ? 5 : 2 });
+            this.targets.push({ ...valid[Math.floor(Math.random() * valid.length)], collected: false, value: (this.gameMode === 'PUZZLE' ? 2 : 5) });
         }
 
         this.history = [];
-        this.initialLevelState = {
-            playerPos: { ...this.playerPos },
-            targets: JSON.parse(JSON.stringify(this.targets)),
-            walls: JSON.parse(JSON.stringify(this.walls)),
-            currentMaxJump: this.config.initialJumpBudget
-        };
-        this.saveHistory();
+        this.initialLevelState = { playerPos: {...this.playerPos}, targets: JSON.parse(JSON.stringify(this.targets)) };
         this.renderEntities();
     }
 
-    constructBackboneSegment(start, dest, budget, backbone) {
-        let cur = { ...start };
-        let curBudget = budget;
-        while (true) {
-            const path = this.getShortestPath(cur, dest);
-            if (!path) return null;
-            if (path.length <= curBudget && path.length > 0) {
-                const nextBudget = this.gameMode === 'CLASSIC' ? 5 : Math.floor(Math.random() * 3) + 3;
-                const target = { ...dest, collected: false, value: nextBudget };
-                if (!backbone.some(t => t.x === target.x && t.y === target.y)) backbone.push(target);
-                else backbone[backbone.findIndex(t => t.x === target.x && t.y === target.y)].value = nextBudget;
-                return { newPos: target, newBudget: nextBudget };
+    generateSecretLevel() {
+        this.targets = [];
+        this.memoriaSelected = [];
+        const possibleRows = Array.from({length: 9}, (_, i) => i + 1); // 1 to 9 (not 0)
+        possibleRows.sort(() => 0.5 - Math.random());
+        for (let i = 0; i < 3; i++) {
+            this.targets.push({ x: 0, y: possibleRows[i], collected: false });
+        }
+        this.renderEntities();
+    }
+
+    async startMemoriaSequence() {
+        this.memoriaPhase = 'FLASH';
+        this.renderEntities();
+        
+        const exposureTime = Math.max(100, 1500 * Math.pow(0.8, this.level - 1));
+        this.remainingTime = Math.floor(exposureTime / 100);
+        this.updateTimerUI();
+
+        await new Promise(r => setTimeout(r, exposureTime));
+        
+        this.memoriaPhase = 'GUESS';
+        this.renderEntities();
+        this.vibrate(50);
+    }
+
+    startBlitzTimer() {
+        this.stopBlitzTimer();
+        const baseSeconds = Math.max(this.config.blitzMinTime, this.config.blitzBaseTime - (this.level - 1));
+        
+        // UNLOCK DETECTION: Reventaste la máquina
+        if (baseSeconds === 10 && !this.data.secretUnlocked) {
+            this.data.secretUnlocked = true;
+            this.savePersistentData();
+            document.getElementById('unlock-overlay').classList.add('active');
+            this.updateModeUI();
+        }
+
+        this.remainingTime = baseSeconds * 10;
+        this.updateTimerUI();
+        this.timerInterval = setInterval(() => {
+            if (this.gameState !== 'PLAYING' || this.isAnimating) return;
+            this.remainingTime--;
+            this.updateTimerUI();
+            if (this.remainingTime <= 0) {
+                this.stopBlitzTimer();
+                this.gameOver("¡Se acabó el tiempo!");
             }
-            const reachable = this.findReachableCells(cur, curBudget);
-            reachable.sort((a, b) => (this.getShortestPath(a, dest)?.length || 999) - (this.getShortestPath(b, dest)?.length || 999));
-            const best = reachable.find(pt => !this.isWall(pt.x, pt.y) && !backbone.some(t => t.x === pt.x && t.y === pt.y));
-            if (!best) return null;
-            const nextBudget = this.gameMode === 'CLASSIC' ? 5 : Math.floor(Math.random() * 3) + 3;
-            const inter = { ...best, collected: false, value: nextBudget };
-            backbone.push(inter);
-            cur = { ...inter };
-            curBudget = nextBudget;
-        }
+        }, 100);
     }
 
-    saveHistory() {
-        this.history.push({
-            playerPos: { ...this.playerPos },
-            currentMaxJump: this.currentMaxJump,
-            targets: JSON.parse(JSON.stringify(this.targets))
-        });
+    stopBlitzTimer() {
+        if (this.timerInterval) { clearInterval(this.timerInterval); this.timerInterval = null; }
     }
 
-    undoMove() {
-        if (this.gameState !== 'PLAYING' || this.history.length <= 1 || this.isAnimating) return;
-        this.history.pop();
-        const prevState = this.history[this.history.length - 1];
-        this.playerPos = { ...prevState.playerPos };
-        this.currentMaxJump = prevState.currentMaxJump;
-        this.targets = JSON.parse(JSON.stringify(prevState.targets));
-        this.vibrate(10);
-        this.renderEntities();
-        this.updateUI();
+    updateTimerUI() {
+        const val = this.gameMode === 'MEMORIA' ? (this.remainingTime / 10).toFixed(0) : (this.remainingTime / 10).toFixed(1);
+        this.timeValEl.innerText = val;
+        this.timeValEl.classList.toggle('emergency', this.remainingTime <= 50);
     }
-
-    restartLevel() {
-        if (!this.initialLevelState || this.isAnimating) return;
-        this.gameState = 'PLAYING';
-        this.closeOverlays();
-        if (this.playerEl) this.playerEl.classList.add('active');
-        this.playerPos = { ...this.initialLevelState.playerPos };
-        this.targets = JSON.parse(JSON.stringify(this.initialLevelState.targets));
-        this.currentMaxJump = this.initialLevelState.currentMaxJump;
-        this.history = [];
-        this.saveHistory();
-        this.renderEntities();
-        this.updateUI();
-        this.vibrate([50, 50]);
-    }
-
-    showLevelGrid() {
-        if (this.isAnimating) return;
-        this.closeOverlays();
-        const container = document.getElementById('level-grid-container');
-        container.innerHTML = '';
-        for (let i = 1; i <= 100; i++) {
-            const square = document.createElement('div');
-            square.className = 'level-square' + (i === this.level ? ' current' : '');
-            square.innerText = i;
-            square.addEventListener('click', () => {
-                this.level = i;
-                this.savePersistentData();
-                this.startGame();
-            });
-            container.appendChild(square);
-        }
-        document.getElementById('level-grid-overlay').classList.add('active');
-    }
-
-    findReachableCells(start, maxDist) {
-        if (maxDist <= 0) return [];
-        const reachable = [];
-        const queue = [{ x: start.x, y: start.y, dist: 0 }];
-        const visited = new Set([`${start.x},${start.y}`]);
-        while (queue.length > 0) {
-            const { x, y, dist } = queue.shift();
-            if (dist > 0 && dist <= maxDist) reachable.push({ x, y });
-            if (dist < maxDist) {
-                [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}].forEach(o => {
-                    const nx = x + o.x, ny = y + o.y;
-                    if (nx>=0 && nx<this.config.boardSize && ny>=0 && ny<this.config.boardSize && 
-                        !visited.has(`${nx},${ny}`) && !this.isWall(nx, ny)) {
-                        visited.add(`${nx},${ny}`);
-                        queue.push({ x: nx, y: ny, dist: dist + 1 });
-                    }
-                });
-            }
-        }
-        return reachable;
-    }
-
-    isWall(x, y) { return this.walls.some(w => w.x === x && w.y === y); }
 
     renderEntities() {
         document.querySelectorAll('.cell').forEach(c => {
-            c.classList.remove('wall');
+            c.classList.remove('wall', 'secret-correct', 'secret-wrong');
             c.innerHTML = '';
-            c.style.cursor = 'default';
             c.onclick = null;
         });
+
         this.walls.forEach(w => this.getCell(w.x, w.y).classList.add('wall'));
-        this.targets.forEach((t) => {
-            if (t.collected) return; 
+        
+        this.targets.forEach((t, idx) => {
+            if (t.collected) return;
             const cell = this.getCell(t.x, t.y);
             const targetEl = document.createElement('div');
             targetEl.className = 'target';
-            targetEl.dataset.value = t.value;
+            
+            if (this.gameMode === 'MEMORIA' && this.memoriaPhase === 'GUESS') {
+                targetEl.classList.add('hidden');
+            }
+            
+            targetEl.dataset.value = t.value || '';
             cell.appendChild(targetEl);
-            cell.style.cursor = 'pointer';
-            cell.onclick = () => this.handleTargetClick(t);
         });
-    }
 
-    getCell(x, y) { return document.getElementById(`cell-${x}-${y}`); }
-
-    updateUI() {
-        this.levelValEl.innerText = this.level;
-        this.movesValEl.innerText = this.gameMode === 'CLASSIC' ? `5` : this.currentMaxJump;
-        const cell = this.getCell(this.playerPos.x, this.playerPos.y);
-        if (cell && this.playerEl) {
-            const x = cell.offsetLeft + cell.offsetWidth / 2;
-            const y = cell.offsetTop + cell.offsetHeight / 2;
-            this.playerEl.style.left = `${x}px`;
-            this.playerEl.style.top = `${y}px`;
+        // Click listeners
+        const rows = (this.gameMode === 'MEMORIA') ? 10 : 8;
+        const cols = (this.gameMode === 'MEMORIA') ? 1 : 8;
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                const cell = this.getCell(x, y);
+                cell.onclick = () => this.handleCellClick(x, y);
+            }
         }
     }
 
-    async handleTargetClick(target) {
+    handleCellClick(x, y) {
         if (this.gameState !== 'PLAYING' || this.isAnimating) return;
+        
+        if (this.gameMode === 'MEMORIA') {
+            if (this.memoriaPhase !== 'GUESS') return;
+            const targetIdx = this.targets.findIndex(t => t.x === x && t.y === y && !t.collected);
+            const cell = this.getCell(x, y);
+            
+            if (targetIdx !== -1) {
+                this.targets[targetIdx].collected = true;
+                cell.classList.add('secret-correct');
+                cell.innerHTML = '<div class="target"></div>';
+                this.vibrate(20);
+                if (this.targets.every(t => t.collected)) this.win();
+            } else {
+                cell.classList.add('secret-wrong');
+                this.vibrate(100);
+                setTimeout(() => this.gameOver("Memoria fallida"), 500);
+            }
+        } else {
+            const target = this.targets.find(t => t.x === x && t.y === y && !t.collected);
+            if (target) this.handleTargetMovement(target);
+        }
+    }
+
+    async handleTargetMovement(target) {
         const path = this.getShortestPath(this.playerPos, target);
-        const dist = path ? path.length : Infinity;
-        const budget = this.gameMode === 'CLASSIC' ? 5 : this.currentMaxJump;
-        if (dist <= budget) {
+        const budget = (this.gameMode === 'PUZZLE') ? this.currentMaxJump : 5;
+        if (path && path.length <= budget) {
             this.isAnimating = true;
             for (const step of path) {
                 this.playerPos = { x: step.x, y: step.y };
                 this.updateUI();
                 await new Promise(r => setTimeout(r, this.config.moveDelay));
             }
-            if (this.gameMode === 'PUZZLE') this.currentMaxJump = target.value; 
+            if (this.gameMode === 'PUZZLE') this.currentMaxJump = target.value;
             target.collected = true;
-            this.saveHistory();
-            this.vibrate([30, 50, 30]);
+            this.history.push({ playerPos: {...this.playerPos}, targets: JSON.parse(JSON.stringify(this.targets)) });
             this.renderEntities();
             this.updateUI();
             this.isAnimating = false;
             if (this.targets.every(t => t.collected)) this.win();
-            else this.checkStuck();
         } else {
             const cell = this.getCell(target.x, target.y);
             cell.classList.add('invalid-move-flash');
             setTimeout(() => cell.classList.remove('invalid-move-flash'), 300);
-            this.vibrate(100);
         }
     }
 
+    win() {
+        this.stopBlitzTimer();
+        this.gameState = 'WIN';
+        
+        // Final Unlock Detection: Te has pasado la máquina
+        if (this.gameMode === 'MEMORIA' && this.level === this.config.memoriaMaxLevels && !this.data.qbertUnlocked) {
+            this.data.qbertUnlocked = true;
+            this.savePersistentData();
+            document.getElementById('final-unlock-overlay').classList.add('active');
+            this.updateModeUI();
+        } else {
+            document.getElementById('win-overlay').classList.add('active');
+        }
+    }
+
+    nextLevel() {
+        if (this.level < 100) this.level++;
+        this.savePersistentData();
+        this.startGame();
+    }
+
+    gameOver(reason) {
+        this.stopBlitzTimer();
+        this.gameState = 'LOSE';
+        document.getElementById('lose-reason').innerText = reason;
+        document.getElementById('lose-overlay').classList.add('active');
+    }
+
+    restartGameFromContext() {
+        if (this.gameMode === 'BLITZ') this.level = Math.floor((this.level - 1) / 5) * 5 + 1;
+        if (this.gameMode === 'MEMORIA') this.level = 1;
+        this.startGame();
+    }
+
+    restartLevel() {
+        this.playerPos = {...this.initialLevelState.playerPos};
+        this.targets = JSON.parse(JSON.stringify(this.initialLevelState.targets));
+        this.startGame();
+    }
+
+    updateUI() {
+        this.levelValEl.innerText = this.level;
+        this.movesValEl.innerText = (this.gameMode === 'PUZZLE') ? this.currentMaxJump : 5;
+        const cell = this.getCell(this.playerPos.x, this.playerPos.y);
+        if (cell && this.playerEl && this.gameMode !== 'MEMORIA') {
+            this.playerEl.style.left = `${cell.offsetLeft + cell.offsetWidth/2}px`;
+            this.playerEl.style.top = `${cell.offsetTop + cell.offsetHeight/2}px`;
+        }
+    }
+
+    getCell(x, y) { return document.getElementById(`cell-${x}-${y}`); }
+    isWall(x, y) { return this.walls.some(w => w.x === x && w.y === y); }
+
     getShortestPath(start, end) {
         if (start.x === end.x && start.y === end.y) return [];
-        const queue = [[start]];
-        const visited = new Set([`${start.x},${start.y}`]);
+        const queue = [[start]], visited = new Set([`${start.x},${start.y}`]);
         while (queue.length > 0) {
-            const path = queue.shift();
-            const { x, y } = path[path.length - 1];
+            const path = queue.shift(), { x, y } = path[path.length - 1];
             if (x === end.x && y === end.y) return path.slice(1);
             [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}].forEach(o => {
                 const nx = x + o.x, ny = y + o.y;
-                if (nx>=0 && nx<this.config.boardSize && ny>=0 && ny<this.config.boardSize && 
-                    !visited.has(`${nx},${ny}`) && !this.isWall(nx, ny)) {
+                if (nx>=0 && nx<8 && ny>=0 && ny<8 && !visited.has(`${nx},${ny}`) && !this.isWall(nx, ny)) {
                     visited.add(`${nx},${ny}`);
-                    queue.push([...path, { x: nx, y: ny }]);
+                    queue.push([...path, {x:nx, y:ny}]);
                 }
             });
         }
         return null;
     }
 
-    checkStuck() {
-        const remainingTargets = this.targets.filter(t => !t.collected);
-        const budget = this.gameMode === 'CLASSIC' ? 5 : this.currentMaxJump;
-        const reachable = remainingTargets.some(t => {
-            const path = this.getShortestPath(this.playerPos, t);
-            return path && path.length <= budget;
-        });
-        if (!reachable) this.gameOver(`Estás bloqueado: Tu salto actual es de ${budget} pasos, pero ninguna meta está al alcance.`);
+    findReachableCells(start, max) {
+        const res = [], q = [{x:start.x, y:start.y, d:0}], v = new Set([`${start.x},${start.y}`]);
+        while(q.length > 0) {
+            const {x, y, d} = q.shift();
+            if (d > 0 && d <= max) res.push({x, y});
+            if (d < max) [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}].forEach(o => {
+                const nx = x+o.x, ny = y+o.y;
+                if (nx>=0 && nx<8 && ny>=0 && ny<8 && !v.has(`${nx},${ny}`) && !this.isWall(nx, ny)) {
+                    v.add(`${nx},${ny}`); q.push({x:nx, y:ny, d:d+1});
+                }
+            });
+        }
+        return res;
     }
 
-    win() {
-        this.gameState = 'WIN';
-        document.getElementById('win-overlay').classList.add('active');
+    constructBackboneSegment(s, e, b, bb) {
+        let cur = {...s}, cB = b;
+        while(true) {
+            const p = this.getShortestPath(cur, e);
+            if (!p) return null;
+            if (p.length <= cB && p.length > 0) {
+                const nB = (this.gameMode ==='PUZZLE') ? Math.floor(Math.random()*3)+3 : 5;
+                const t = {...e, collected: false, value: nB};
+                if (!bb.some(x => x.x===e.x && x.y===e.y)) bb.push(t);
+                return {newPos: t, newBudget: nB};
+            }
+            const r = this.findReachableCells(cur, cB).filter(pt => !this.isWall(pt.x, pt.y) && !bb.some(x => x.x===pt.x && x.y===pt.y));
+            if (r.length === 0) return null;
+            r.sort((a,b) => (this.getShortestPath(a, e)?.length || 99) - (this.getShortestPath(b, e)?.length || 99));
+            const nB = (this.gameMode ==='PUZZLE') ? Math.floor(Math.random()*3)+3 : 5;
+            const inter = {...r[0], collected: false, value: nB};
+            bb.push(inter); cur = {...inter}; cB = nB;
+        }
     }
 
-    gameOver(reason) {
-        this.gameState = 'LOSE';
-        document.getElementById('lose-reason').innerText = reason;
-        document.getElementById('lose-overlay').classList.add('active');
-        this.vibrate(200);
-    }
-
-    closeOverlays() { document.querySelectorAll('.overlay').forEach(o => o.classList.remove('active')); }
-    showMenu() {
-        if (this.isAnimating) return;
-        this.gameState = 'START';
+    showLevelGrid() {
         this.closeOverlays();
-        document.getElementById('start-overlay').classList.add('active');
-        if (this.playerEl) this.playerEl.classList.remove('active');
+        const container = document.getElementById('level-grid-container');
+        container.innerHTML = '';
+        const limit = (this.gameMode === 'BLITZ') ? this.data.blitzMaxLevel : 100;
+        for (let i = 1; i <= limit; i++) {
+            if (this.gameMode === 'BLITZ' && (i-1)%5 !== 0 && i !== this.level) continue;
+            const sq = document.createElement('div');
+            sq.className = 'level-square' + (i === this.level ? ' current' : '');
+            sq.innerText = i;
+            sq.onclick = () => { this.level = i; this.savePersistentData(); this.startGame(); };
+            container.appendChild(sq);
+        }
+        document.getElementById('level-grid-overlay').classList.add('active');
     }
 
-    vibrate(p) { if (navigator.vibrate) navigator.vibrate(p); }
+    showMenu() { this.gameState = 'START'; this.closeOverlays(); document.getElementById('start-overlay').classList.add('active'); this.updateModeUI(); }
+    closeOverlays() { document.querySelectorAll('.overlay').forEach(o => o.classList.remove('active')); }
+    vibrate(p) { if(navigator.vibrate) navigator.vibrate(p); }
     handleInstallPrompt() {
         let dp; const btn = document.getElementById('install-button');
         window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); dp = e; btn.style.display = 'block'; });
-        btn.addEventListener('click', async () => { if (dp) { dp.prompt(); const { outcome } = await dp.userChoice; if (outcome === 'accepted') btn.style.display = 'none'; dp = null; } });
+        btn.onclick = async () => { if (dp) { dp.prompt(); const { outcome } = await dp.userChoice; if (outcome === 'accepted') btn.style.display = 'none'; dp = null; } };
     }
 }
-
 window.addEventListener('DOMContentLoaded', () => { new Game(); });

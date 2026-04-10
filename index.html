@@ -22,6 +22,10 @@
                     <span class="stat-label">Nivel</span>
                     <span id="level-val" class="stat-value">1</span>
                 </div>
+                <div class="stat-item" id="time-stat" style="display: none; border-color: #ff0055;">
+                    <span class="stat-label">Tiempo</span>
+                    <span id="time-val" class="stat-value">30.0</span>
+                </div>
                 <div class="stat-item">
                     <span id="moves-label" class="stat-label">Salto</span>
                     <span id="moves-val" class="stat-value">5</span>
@@ -48,6 +52,20 @@
         </div>
     </div>
 
+    <!-- Celebration 1: Reventaste la máquina -->
+    <div id="unlock-overlay" class="overlay">
+        <h2 style="color: gold; text-shadow: 0 0 20px gold;">¡REVENTASTE LA MÁQUINA!</h2>
+        <p>Has alcanzado el límite de velocidad. Se ha desbloqueado un nuevo modo de juego secreto.</p>
+        <button id="unlock-ok-btn">Aceptar</button>
+    </div>
+
+    <!-- Celebration 2: Te has pasado la máquina -->
+    <div id="final-unlock-overlay" class="overlay">
+        <h2 style="color: #ff00ff; text-shadow: 0 0 20px #ff00ff;">¡TE HAS PASADO LA MÁQUINA!</h2>
+        <p>Tu memoria es infalible. Has desbloqueado el desafío definitivo: MODO Q*BERT.</p>
+        <button id="final-unlock-ok-btn">ENTRAR AL MASTER</button>
+    </div>
+
     <!-- Win Overlay -->
     <div id="win-overlay" class="overlay">
         <h2>Paso Completado</h2>
@@ -66,15 +84,18 @@
     <div id="start-overlay" class="overlay active">
         <h2>BIENVENIDO</h2>
         <p>Llega a las metas en menos de 5 pasos entre cada una.</p>
-        <div id="mode-selection" style="display: flex; gap: 10px; margin-bottom: 20px;">
+        <div id="mode-selection" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; justify-content: center;">
             <button id="set-classic-mode" class="secondary-btn active">CLÁSICO</button>
             <button id="set-puzzle-mode" class="secondary-btn">ESTRATEGIA</button>
+            <button id="set-blitz-mode" class="secondary-btn">AGOBIO</button>
+            <button id="set-secret-mode" class="secondary-btn" style="display: none; border-color: gold; color: gold;">SECRETO</button>
+            <button id="set-qbert-mode" class="secondary-btn" style="display: none; border-color: #ff00ff; color: #ff00ff;">Q*BERT</button>
         </div>
         <div style="display: flex; gap: 10px;">
             <button id="start-btn">Empezar</button>
             <button id="level-select-btn" class="secondary-btn" style="margin-top: 20px;">Elegir Nivel</button>
         </div>
-        <div style="margin-top: 20px; font-size: 0.7rem; opacity: 0.4;">v1.8.4</div>
+        <div style="margin-top: 20px; font-size: 0.7rem; opacity: 0.4;">v2.0.0 - Edición Master</div>
     </div>
 
     <!-- Level Selection Grid Overlay -->
