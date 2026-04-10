@@ -287,6 +287,8 @@ class Game {
         document.querySelectorAll('.cell').forEach(c => {
             c.classList.remove('wall');
             c.innerHTML = '';
+            c.style.cursor = 'default';
+            c.onclick = null;
         });
         this.walls.forEach(w => this.getCell(w.x, w.y).classList.add('wall'));
         this.targets.forEach((t, index) => {
@@ -295,12 +297,11 @@ class Game {
             const targetEl = document.createElement('div');
             targetEl.className = 'target';
             targetEl.dataset.index = index;
-            // Next target visual deactivated for difficulty
-            targetEl.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.handleTargetClick(t);
-            });
             cell.appendChild(targetEl);
+
+            // Make the whole cell clickable and show pointer
+            cell.style.cursor = 'pointer';
+            cell.onclick = () => this.handleTargetClick(t);
         });
     }
 
