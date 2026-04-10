@@ -1,5 +1,5 @@
 /**
- * Mueve 5 - Master Edition (v2.5.1)
+ * Mueve 5 - Master Edition (v2.6.2)
  * Modes: CLASSIC, PUZZLE, BLITZ, MEMORIA (Parpadeo)
  */
 
@@ -82,7 +82,7 @@ class Game {
             else if (this.memoriaPhase === 'GUESS') hintEl.innerText = 'Haz clic en las casillas memorizadas';
             else hintEl.innerText = '¡Nivel completado!';
         } else {
-            hintEl.innerText = 'Usa las flechas o toca un diamante para saltar';
+            hintEl.innerText = 'Toca un diamante para saltar';
         }
     }
 
@@ -349,7 +349,7 @@ class Game {
     }
 
     updateTimerUI() {
-        const val = this.gameMode === 'MEMORIA' ? (this.remainingTime / 10).toFixed(0) : (this.remainingTime / 10).toFixed(1);
+        const val = (this.remainingTime / 10).toFixed(1);
         this.timeValEl.innerText = val;
         this.timeValEl.classList.toggle('emergency', this.remainingTime <= 50);
     }
@@ -476,7 +476,11 @@ class Game {
     }
 
     updateUI() {
-        this.levelValEl.innerText = this.level;
+        if (this.gameMode === 'MEMORIA') {
+            this.levelValEl.innerText = `${this.level} (Récord: ${this.data.memoriaMaxLevel || 0})`;
+        } else {
+            this.levelValEl.innerText = this.level;
+        }
         this.movesValEl.innerText = (this.gameMode === 'PUZZLE') ? this.currentMaxJump : 5;
         const cell = this.getCell(this.playerPos.x, this.playerPos.y);
         if (cell && this.playerEl && this.gameMode !== 'MEMORIA') {
@@ -529,10 +533,16 @@ class Game {
             if (p.length <= cB && p.length > 0) {
                 const nB = (this.gameMode ==='PUZZLE') ? Math.floor(Math.random()*3)+3 : 5;
                 const t = {...e, collected: false, value: nB};
+                // Ensure target is not on player's initial position
+                if (e.x === this.playerPos.x && e.y === this.playerPos.y) return null;
                 if (!bb.some(x => x.x===e.x && x.y===e.y)) bb.push(t);
                 return {newPos: t, newBudget: nB};
             }
-            const r = this.findReachableCells(cur, cB).filter(pt => !this.isWall(pt.x, pt.y) && !bb.some(x => x.x===pt.x && x.y===pt.y));
+            const r = this.findReachableCells(cur, cB).filter(pt => 
+                !this.isWall(pt.x, pt.y) && 
+                !bb.some(x => x.x===pt.x && x.y===pt.y) &&
+                !(pt.x === this.playerPos.x && pt.y === this.playerPos.y)
+            );
             if (r.length === 0) return null;
             r.sort((a,b) => (this.getShortestPath(a, e)?.length || 99) - (this.getShortestPath(b, e)?.length || 99));
             const nB = (this.gameMode ==='PUZZLE') ? Math.floor(Math.random()*3)+3 : 5;
