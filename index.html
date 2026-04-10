@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mueve 5 | Puzzle Pro</title>
+    <meta name="description" content="Un juego de puzzle estratégico donde debes moverte con precisión en un tablero de 8x8.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#05050a">
+    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/5903/5903517.png">
+    <!-- IOS support -->
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/5903/5903517.png">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>MUEVE 5</h1>
+            <div class="stats">
+                <div class="stat-item clickable" id="level-display">
+                    <span class="stat-label">Nivel</span>
+                    <span id="level-val" class="stat-value">1</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Pasos</span>
+                    <span id="moves-val" class="stat-value">0/5</span>
+                </div>
+                <button id="install-button">Instalar</button>
+            </div>
+        </header>
+
+        <div id="game-container">
+            <div id="board">
+                <!-- Cells generated via JS -->
+                <div id="player"></div>
+            </div>
+        </div>
+
+        <div id="controls-bar">
+            <button id="menu-btn" class="secondary-btn">Menú</button>
+            <button id="undo-btn" class="secondary-btn">Deshacer</button>
+            <button id="restart-level-btn" class="secondary-btn">Reiniciar</button>
+        </div>
+
+        <div class="controls-hint">
+            Usa las flechas, WASD o haz clic para moverte
+        </div>
+    </div>
+
+    <!-- Win Overlay -->
+    <div id="win-overlay" class="overlay">
+        <h2>Paso Completado</h2>
+        <p>¡Has llegado a todas las metas!</p>
+        <button id="next-level-btn">Siguiente Nivel</button>
+    </div>
+
+    <!-- Lose Overlay -->
+    <div id="lose-overlay" class="overlay">
+        <h2>Game Over</h2>
+        <p id="lose-reason">Te has quedado sin movimientos.</p>
+        <button id="restart-btn">Reintentar</button>
+    </div>
+
+    <!-- Start Overlay -->
+    <div id="start-overlay" class="overlay active">
+        <h2>BIENVENIDO</h2>
+        <p>Llega a las metas en menos de 5 pasos entre cada una.</p>
+        <div style="display: flex; gap: 10px;">
+            <button id="start-btn">Empezar</button>
+            <button id="level-select-btn" class="secondary-btn" style="margin-top: 20px;">Elegir Nivel</button>
+        </div>
+        <div style="margin-top: 20px; font-size: 0.7rem; opacity: 0.4;">v1.6.0</div>
+    </div>
+
+    <!-- Level Selection Grid Overlay -->
+    <div id="level-grid-overlay" class="overlay">
+        <h2>Selecciona Nivel</h2>
+        <div id="level-grid-container" class="level-grid">
+            <!-- Squares generated via JS -->
+        </div>
+        <button id="close-level-grid" class="secondary-btn">Volver</button>
+    </div>
+
+    <script src="game.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
+</body>
+</html>
