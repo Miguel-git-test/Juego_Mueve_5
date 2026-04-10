@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mueve5-v1.8.3';
+const CACHE_NAME = 'mueve5-v1.8.4';
 const ASSETS = [
   './',
   './index.html',

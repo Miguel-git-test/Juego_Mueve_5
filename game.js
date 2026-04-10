@@ -130,7 +130,9 @@ class Game {
 
     nextLevel() {
         if (this.isAnimating) return;
-        this.level++;
+        if (this.level < 100) {
+            this.level++;
+        }
         this.savePersistentData();
         this.startGame();
     }
@@ -203,7 +205,8 @@ class Game {
         }
 
         // Extra Metas
-        const metasCount = this.gameMode === 'CLASSIC' ? 5 + Math.floor(this.level / 2) : 10;
+        // Max 15 targets to prevent board saturation
+        const metasCount = this.gameMode === 'CLASSIC' ? Math.min(15, 5 + Math.floor(this.level / 2)) : 10;
         const numTotalTargets = Math.max(metasCount, this.targets.length);
         while (this.targets.length < numTotalTargets) {
             const source = this.targets[Math.floor(Math.random() * this.targets.length)];
