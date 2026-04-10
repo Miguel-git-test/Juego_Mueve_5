@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mueve 5 | Puzzle Pro</title>
+    <title>Mueve 5 | Estrategia</title>
     <meta name="description" content="Un juego de puzzle estratégico donde debes moverte con precisión en un tablero de 8x8.">
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
@@ -23,8 +23,8 @@
                     <span id="level-val" class="stat-value">1</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-label">Pasos</span>
-                    <span id="moves-val" class="stat-value">0/5</span>
+                    <span id="moves-label" class="stat-label">Salto</span>
+                    <span id="moves-val" class="stat-value">5</span>
                 </div>
                 <button id="install-button">Instalar</button>
             </div>
@@ -66,11 +66,15 @@
     <div id="start-overlay" class="overlay active">
         <h2>BIENVENIDO</h2>
         <p>Llega a las metas en menos de 5 pasos entre cada una.</p>
+        <div id="mode-selection" style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button id="set-classic-mode" class="secondary-btn active">CLÁSICO</button>
+            <button id="set-puzzle-mode" class="secondary-btn">ESTRATEGIA</button>
+        </div>
         <div style="display: flex; gap: 10px;">
             <button id="start-btn">Empezar</button>
             <button id="level-select-btn" class="secondary-btn" style="margin-top: 20px;">Elegir Nivel</button>
         </div>
-        <div style="margin-top: 20px; font-size: 0.7rem; opacity: 0.4;">v1.6.0</div>
+        <div style="margin-top: 20px; font-size: 0.7rem; opacity: 0.4;">v1.8.1</div>
     </div>
 
     <!-- Level Selection Grid Overlay -->

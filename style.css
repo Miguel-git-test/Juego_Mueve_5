@@ -179,6 +179,22 @@ h1 {
     box-shadow: 0 0 15px var(--accent-secondary);
     cursor: pointer;
     transition: transform 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.target::before {
+    content: attr(data-value);
+    transform: rotate(-45deg);
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: white;
+    display: var(--target-value-display, block);
+}
+
+.classic-mode .target::before {
+    display: none;
 }
 
 .target:hover {
@@ -250,8 +266,11 @@ button:hover {
     margin-top: 0;
 }
 
-.secondary-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+.secondary-btn.active {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: black;
+    box-shadow: 0 0 10px var(--accent-primary);
 }
 
 #controls-bar {
