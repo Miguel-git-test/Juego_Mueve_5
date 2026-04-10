@@ -73,6 +73,19 @@ class Game {
         this.handleInstallPrompt();
     }
 
+    updateInstructions() {
+        const hintEl = document.querySelector('.controls-hint');
+        if (!hintEl) return;
+        
+        if (this.gameMode === 'MEMORIA') {
+            if (this.memoriaPhase === 'FLASH') hintEl.innerText = 'Observa y memoriza las posiciones...';
+            else if (this.memoriaPhase === 'GUESS') hintEl.innerText = 'Haz clic en las casillas memorizadas';
+            else hintEl.innerText = '¡Nivel completado!';
+        } else {
+            hintEl.innerText = 'Usa las flechas o toca un diamante para saltar';
+        }
+    }
+
     savePersistentData() {
         if (this.gameMode === 'CLASSIC') this.data.classicLevel = this.level;
         else if (this.gameMode === 'PUZZLE') this.data.puzzleLevel = this.level;
@@ -136,6 +149,17 @@ class Game {
         document.getElementById('level-display').onclick = () => this.showLevelGrid();
     }
 
+    undoMove() {
+        if (this.gameState !== 'PLAYING' || this.isAnimating || this.history.length === 0) return;
+        const prevState = this.history.pop();
+        this.playerPos = { ...prevState.playerPos };
+        this.targets = JSON.parse(JSON.stringify(prevState.targets));
+        this.currentMaxJump = prevState.currentMaxJump || this.config.initialJumpBudget;
+        this.renderEntities();
+        this.updateUI();
+        this.vibrate(10);
+    }
+
     setMode(mode) {
         if (this.isAnimating) return;
         this.gameMode = mode;
@@ -175,9 +199,15 @@ class Game {
         // Timer stats visibility
         this.timeStatEl.style.display = (this.gameMode === 'BLITZ' || this.gameMode === 'MEMORIA') ? 'flex' : 'none';
         
+        // Pasos visibility (Hide in Memoria)
+        const stepsStat = document.getElementById('steps-stat');
+        if (stepsStat) stepsStat.style.display = (this.gameMode === 'MEMORIA') ? 'none' : 'flex';
+
         document.querySelectorAll('.stat-item').forEach(el => el.classList.remove('active-mode'));
         if (this.gameMode === 'BLITZ' || this.gameMode === 'MEMORIA') this.timeStatEl.classList.add('active-mode');
-        else this.movesLabelEl.parentElement.classList.add('active-mode');
+        else if (stepsStat) stepsStat.classList.add('active-mode');
+
+        this.updateInstructions();
     }
 
     startGame() {
@@ -291,6 +321,7 @@ class Game {
         
         this.memoriaPhase = 'GUESS';
         this.renderEntities();
+        this.updateInstructions();
         this.vibrate(50);
     }
 
@@ -387,6 +418,12 @@ class Game {
         const budget = (this.gameMode === 'PUZZLE') ? this.currentMaxJump : 5;
         if (path && path.length <= budget) {
             this.isAnimating = true;
+            this.history.push({ 
+                playerPos: { x: path[0].x, y: path[0].y }, // Save pos before moving
+                targets: JSON.parse(JSON.stringify(this.targets)),
+                currentMaxJump: this.currentMaxJump
+            });
+            
             for (const step of path) {
                 this.playerPos = { x: step.x, y: step.y };
                 this.updateUI();
@@ -394,11 +431,11 @@ class Game {
             }
             if (this.gameMode === 'PUZZLE') this.currentMaxJump = target.value;
             target.collected = true;
-            this.history.push({ playerPos: {...this.playerPos}, targets: JSON.parse(JSON.stringify(this.targets)) });
             this.renderEntities();
             this.updateUI();
             this.isAnimating = false;
             if (this.targets.every(t => t.collected)) this.win();
+            else this.checkPossibleMoves();
         } else {
             const cell = this.getCell(target.x, target.y);
             cell.classList.add('invalid-move-flash');
@@ -409,6 +446,7 @@ class Game {
     win() {
         this.stopBlitzTimer();
         this.gameState = 'WIN';
+        this.updateInstructions();
         document.getElementById('win-overlay').classList.add('active');
     }
 
@@ -445,6 +483,7 @@ class Game {
             this.playerEl.style.left = `${cell.offsetLeft + cell.offsetWidth/2}px`;
             this.playerEl.style.top = `${cell.offsetTop + cell.offsetHeight/2}px`;
         }
+        this.updateInstructions();
     }
 
     getCell(x, y) { return document.getElementById(`cell-${x}-${y}`); }
@@ -521,6 +560,19 @@ class Game {
     showMenu() { this.gameState = 'START'; this.closeOverlays(); document.getElementById('start-overlay').classList.add('active'); this.updateModeUI(); }
     closeOverlays() { document.querySelectorAll('.overlay').forEach(o => o.classList.remove('active')); }
     vibrate(p) { if(navigator.vibrate) navigator.vibrate(p); }
+    checkPossibleMoves() {
+        const budget = (this.gameMode === 'PUZZLE') ? this.currentMaxJump : 5;
+        const activeTargets = this.targets.filter(t => !t.collected);
+        const reachable = activeTargets.some(t => {
+            const path = this.getShortestPath(this.playerPos, t);
+            return path && path.length <= budget;
+        });
+        
+        if (!reachable && activeTargets.length > 0) {
+            this.gameOver("No hay camino posible hasta la siguiente meta");
+        }
+    }
+
     handleInstallPrompt() {
         let dp; const btn = document.getElementById('install-button');
         window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); dp = e; btn.style.display = 'block'; });
