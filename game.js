@@ -1,5 +1,5 @@
 /**
- * Mueve 5 - Master Edition (v2.6.2)
+ * Mueve 5 - Master Edition (v2.7.0)
  * Modes: CLASSIC, PUZZLE, BLITZ, MEMORIA (Parpadeo)
  */
 
@@ -272,11 +272,26 @@ class Game {
 
         // Deception (Puzzle only)
         if (this.gameMode === 'PUZZLE') {
-            // Trap at start
             const first = this.targets[0];
-            const dist = this.getShortestPath(this.playerPos, first)?.length || 99;
-            const traps = this.findReachableCells(this.playerPos, dist - 1).filter(pt => !this.isWall(pt.x, pt.y) && !this.targets.some(t => t.x === pt.x && t.y === pt.y));
-            if (traps.length > 0) this.targets.push({ ...traps[Math.floor(Math.random() * traps.length)], collected: false, value: 2 });
+            const distToFirst = this.getShortestPath(this.playerPos, first)?.length || 99;
+            const traps = this.findReachableCells(this.playerPos, distToFirst - 1).filter(pt => 
+                !this.isWall(pt.x, pt.y) && 
+                !this.targets.some(t => t.x === pt.x && t.y === pt.y) &&
+                !(pt.x === this.playerPos.x && pt.y === this.playerPos.y)
+            );
+            
+            if (traps.length > 0) {
+                // Find a trap that can at least reach one existing target
+                for (let attempt = 0; attempt < 5; attempt++) {
+                    const candidate = traps[Math.floor(Math.random() * traps.length)];
+                    const val = Math.floor(Math.random() * 2) + 2; // Value 2-3
+                    const pathBack = this.getShortestPath(candidate, this.targets[0]);
+                    if (pathBack && pathBack.length <= val) {
+                        this.targets.push({ ...candidate, collected: false, value: val });
+                        break;
+                    }
+                }
+            }
         }
 
         // Metas fill
@@ -290,7 +305,26 @@ class Game {
                 !(pt.x === this.playerPos.x && pt.y === this.playerPos.y)
             );
             if (valid.length === 0) break;
-            this.targets.push({ ...valid[Math.floor(Math.random() * valid.length)], collected: false, value: (this.gameMode === 'PUZZLE' ? 2 : 5) });
+            
+            const candidate = valid[Math.floor(Math.random() * valid.length)];
+            const newValue = (this.gameMode === 'PUZZLE' ? (Math.floor(Math.random() * 3) + 3) : 5);
+            
+            // In Puzzle mode, verify this new meta can reach AT LEAST one existing meta
+            if (this.gameMode === 'PUZZLE') {
+                const canEscape = this.targets.some(existing => {
+                    const p = this.getShortestPath(candidate, existing);
+                    return p && p.length <= newValue;
+                });
+                if (!canEscape) {
+                    // Try increasing the value slightly
+                    if (this.targets.some(existing => (this.getShortestPath(candidate, existing)?.length || 99) <= 5)) {
+                        this.targets.push({ ...candidate, collected: false, value: 5 });
+                    }
+                    continue; // Skip if still no escape
+                }
+            }
+            
+            this.targets.push({ ...candidate, collected: false, value: newValue });
         }
 
         this.history = [];
