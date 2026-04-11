@@ -1,5 +1,5 @@
 /**
- * Mueve 5 - Master Edition (v2.7.0)
+ * Mueve 5 - Master Edition (v2.7.2)
  * Modes: CLASSIC, PUZZLE, BLITZ, MEMORIA (Parpadeo)
  */
 
